@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, minimal-ui">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="grey">
+
+    <meta name="description" content="A demostration of simple semantic similarity measurement using Word2Vec.">
+    <meta name="author" content="Peng Yu">
+
+    <title>Semantic Similarity using Word2Vec</title>
+
+    <!-- Bootstrap core CSS -->
+    <link href="css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap theme -->
+    <link href="css/bootstrap-theme.min.css" rel="stylesheet">
+
+    <!-- Custom styles for this template -->
+    <link href="css/template.css" rel="stylesheet">
+
+    <!-- Bootstrap core JavaScript -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.0/jquery.min.js"></script>
+    <script src="js/bootstrap.min.js"></script>
+
+    <script>
+
+var similarityURL = "https://uhura.csail.mit.edu:8443/distance-calculator/similarity/Word2VecFreeBase?";
+// var similarityURL = "http://localhost:8080/distance-calculator/similarity/Word2VecFreeBase?";
+
+var freebaseAPI = "https://www.googleapis.com/freebase/v1/search?key=AIzaSyARQHMIJw6tN-WcBQ0YmCtquhZ2EpXwf7s&"
+
+var queryType = 1; // 1 for freebase id; 2 for plain description
+var sourceID = null;
+var idStringMap = {};
+
+function sendQuery(){
+
+    /*Send the report to the server*/
+    var options = {}
+
+
+    if (queryType == 1){
+
+        options["source"] = document.getElementById('source').value;
+        options["targets"] = document.getElementById('targets').value;
+
+    } else if (queryType == 2){
+
+        options["source"] = sourceID;
+
+        for (var id in idStringMap) {
+            if (options["targets"] == undefined){
+                options["targets"] = id;
+            } else {
+                options["targets"] = options["targets"] + ',' + id;
+            }
+        }
+    }
+
+    var url = [];
+    url.push(similarityURL);
+
+    for (var key in options) {
+        var value = options[key];
+        if (value != null && value != undefined) {
+            url.push(key + "=" + value + "&");
+        }
+    }
+
+    queryServer(url);
+
+}
+
+function getFreebaseIDs(){
+
+    sourceID = null;
+    idStringMap = {};
+    document.getElementById('result').innerHTML = '<center><font color="green">'+'</font></center>';
+
+    var typeWord = document.getElementById('type').value;
+    var sourceDescription = document.getElementById('source').value + ' ' + typeWord;
+
+    // Need to call freebase api to get the ids for user inputs
+    getSourceFreebaseID(sourceDescription);
+
+    var targetWords = document.getElementById('targets').value.split(",");
+
+    for (var i = 0; i < targetWords.length; i++){
+        var targetWord = targetWords[i];
+        var targetDescription = targetWord + ' ' + typeWord;
+        getFreebaseID(targetDescription);
+    }
+}
+
+function getSourceFreebaseID(expression){
+
+    var url = freebaseAPI + "query=" + expression;
+    console.log('Query: ' + expression);
+
+    $.getJSON(url, function(data) {
+        console.log(data);
+
+        if (data.status != "200 OK"){
+
+            document.getElementById('result').innerHTML = '<center><font color="red">Error getting freebase ID: '+data+"</font></center>";
+
+        } else {
+            
+            var results = data.result;
+
+            for (var i = 0; i < results.length; i++) {
+
+                idStringMap[results[i].mid] = {
+                    "mid": results[i].mid,
+                    "id": results[i].id,
+                    "name": results[i].name
+                };
+                sourceID = results[i].mid;
+                console.log(results[i].mid + '---' + results[i].name);
+                break;
+            }
+        }
+    });
+}
+
+function getFreebaseID(expression){
+
+    var url = freebaseAPI + "query=" + expression;
+    console.log('Query: ' + expression);
+
+    $.getJSON(url, function(data) {
+        console.log(data);
+
+        if (data.status != "200 OK"){
+
+            document.getElementById('result').innerHTML = '<center><font color="red">Error getting freebase ID: '+data+"</font></center>";
+
+        } else {
+            
+            var results = data.result;
+
+            for (var i = 0; i < results.length; i++) {
+
+                idStringMap[results[i].mid] = {
+                    "mid": results[i].mid,
+                    "id": results[i].id,
+                    "name": results[i].name
+                };
+                console.log(results[i].mid + '---' + results[i].name);
+                break;
+            }
+        }
+    });
+}
+
+function queryServer(url){
+
+    document.getElementById('query').innerHTML = '<center><font color="blue">'+url.join("")+"</font></center>";
+    $.getJSON(url.join(""), function(data) {
+        console.log(data);
+
+        if (data.Error != null){
+            document.getElementById('result').innerHTML = '<center><font color="red">Error: '+data.Error+"</font></center>";
+        } else {
+            
+        	var results = data.results;
+        	results.sort(function(a, b) {
+                return b.similarity - a.similarity
+            });
+        	
+        	var resultDescription = []
+            for (var i = 0; i < results.length; i++) {
+                if (idStringMap[results[i].word] == undefined){
+                    resultDescription.push(results[i].word + ":" + results[i].similarity);
+                } else {
+                    resultDescription.push(results[i].word + " (" + idStringMap[results[i].word].name + "):" + results[i].similarity);
+                }
+            }
+            
+            document.getElementById('result').innerHTML = '<center><font color="green">'+resultDescription.join("<br />")+"</font></center>";
+
+        }
+
+
+    });
+}
+
+function showFreebaseInputs()
+{
+    isDeparture = true;    
+    document.getElementById("sourceLabel").innerHTML = 'Source ID:';
+    document.getElementById("targetsLabel").innerHTML = 'Target IDs:';
+
+    document.getElementById("btn-use-id").className = "btn btn-warning";
+    document.getElementById("btn-use-string").className = "btn btn-default";
+
+    document.getElementById("typeContainer").style.display = 'none';
+    document.getElementById("btn-get-ids").style.display = 'none';
+
+    if (queryType != 1){
+        queryType = 1; 
+    }
+}
+
+function showStringInputs()
+{
+    isDeparture = true;    
+    document.getElementById("sourceLabel").innerHTML = 'Source word:';
+    document.getElementById("targetsLabel").innerHTML = 'Target words:';
+
+    document.getElementById("btn-use-id").className = "btn btn-default";
+    document.getElementById("btn-use-string").className = "btn btn-warning";
+
+    document.getElementById("typeContainer").style.display = 'block';
+    document.getElementById("btn-get-ids").style.display = 'block';
+
+    if (queryType != 2){
+        queryType = 2; 
+    }
+}
+
+window.onload = function() {
+    showFreebaseInputs();
+}
+</script>
+
+
+</head>
+
+<body>
+
+    <nav class="navbar navbar-default navbar-fixed-top">
+      <div class="container">
+        <div class="navbar-header">
+          <a class="navbar-brand">Semantic Similarity Calculator</a>
+        </div>
+      </div>
+    </nav>
+        
+    <div class="container" style="margin-top:60px">
+        <div class="container">
+            <form role="form">
+                <div class="form-group" style="margin-bottom:20px;text-align:center">
+                    <button type="button" id="btn-use-id" class="btn btn-warning" style="width:48%" onclick="showFreebaseInputs()">USE FREEBASE ID</button>
+                    <button type="button" id="btn-use-string" class="btn btn-default" style="width:48%" onclick="showStringInputs()">USE DESCRIPTION</button>
+                </div>
+                <div class="form-group" style="margin-bottom:0px">
+                    <label for="sourceWord" id="sourceLabel">Source ID:</label>
+                    <input type="text" class="form-control" id="source" placeholder="">
+                </div>
+                <div class="form-group" style="margin-bottom:0px">
+                    <label for="targetWords" id="targetsLabel">Target IDs:</label>
+                    <input type="text" class="form-control" id="targets" placeholder="">
+                </div>
+                <div id="typeContainer" class="form-group" style="margin-bottom:0px">
+                    <label for="type">Type word:</label>
+                    <input type="text" class="form-control" id="type" placeholder="">
+                </div>
+                
+                <button type="button" id="btn-get-ids" class="btn btn-success" style="width:100%;margin-top:5px" onclick="getFreebaseIDs()">GET FREEBASE ID</button>
+                <button type="button" class="btn btn-primary" style="width:100%;margin-top:5px" onclick="sendQuery()">SUBMIT</button>
+                <p id="query"></p>
+                <p id="result"></p>
+            </form>
+        </div>
+    </div> 
+
+</body>
+</html>
